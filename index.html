@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- KO4RBW -->
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOB Plotter</title>
+
+  <!-- PWA meta -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d6efd" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LOB Plotter" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body, html { margin: 0; height: 100%; }
+    #map { width: 100%; height: 100%; }
+    .control-panel {
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: white; padding: 10px; border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 14px;
+    }
+    .control-panel input, .control-panel button { margin: 4px 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="control-panel">
+    <button onclick="useMyLocation()">Use My Location</button>
+    <input id="lat" type="number" placeholder="Latitude" step="any" />
+    <input id="lng" type="number" placeholder="Longitude" step="any" />
+    <input id="bearing" type="number" placeholder="Bearing (°)" />
+    <button onclick="addLOB()">Add LOB</button>
+    <button onclick="findIntersections()">Find Fix</button>
+  </div>
+
+  <script>
+    const map = L.map('map').setView([38.5, -78.5], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let lobLines = [];
+
+    function useMyLocation() {
+      navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById('lat').value = pos.coords.latitude;
+        document.getElementById('lng').value = pos.coords.longitude;
+      });
+    }
+
+    function addLOB() {
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lng = parseFloat(document.getElementById('lng').value);
+      const bearing = parseFloat(document.getElementById('bearing').value);
+
+      if (isNaN(lat) || isNaN(lng) || isNaN(bearing)) {
+        alert("Please enter valid lat, lng, and bearing");
+        return;
+      }
+
+      const length = 0.5;
+      const rad = bearing * Math.PI / 180;
+      const lat2 = lat + length * Math.cos(rad);
+      const lng2 = lng + length * Math.sin(rad);
+
+      const line = L.polyline([[lat, lng], [lat2, lng2]], {color: 'red'}).addTo(map);
+      lobLines.push([[lat, lng], [lat2, lng2]]);
+    }
+
+    function lineIntersection(l1, l2) {
+      const [[x1,y1],[x2,y2]] = l1;
+      const [[x3,y3],[x4,y4]] = l2;
+
+      const denom = (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);
+      if (denom === 0) return null;
+
+      const px = ((x1*y2-y1*x2)*(x3-x4)-(x1-x2)*(x3*y4-y3*x4)) / denom;
+      const py = ((x1*y2-y1*x2)*(y3-y4)-(y1-y2)*(x3*y4-y3*x4)) / denom;
+      return [px, py];
+    }
+
+    function findIntersections() {
+      for (let i=0; i<lobLines.length; i++) {
+        for (let j=i+1; j<lobLines.length; j++) {
+          const pt = lineIntersection(lobLines[i], lobLines[j]);
+          if (pt) {
+            L.marker(pt).addTo(map).bindPopup("Fix");
+          }
+        }
+      }
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js");
+    }
+  </script>
+</body>
+</html>
